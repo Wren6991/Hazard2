@@ -1,0 +1,5 @@
+*/__pycache__
+*.vcd
+*.bin
+*.elf
+*.dis
