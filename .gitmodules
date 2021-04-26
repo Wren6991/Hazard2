@@ -1,0 +1,3 @@
+[submodule "sim/riscv-compliance/riscv-arch-test"]
+	path = sim/riscv-compliance/riscv-arch-test
+	url = https://github.com/riscv/riscv-arch-test.git

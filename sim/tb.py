@@ -41,13 +41,13 @@ def main(argv):
 						sys.stdout.write(chr(wdata & 0xff))
 					elif dph_addr == 0x80000008:
 						print(f"CPU terminated simulation with exit code {wdata}")
-						return
+						break
 					else:
 						raise Exception(f"Unknown IO address {dph_addr:08x}")
 				else:
 					for i in range(4):
 						if i >= (dph_addr & 0x3) and i < ((dph_addr & 0x3) + (1 << dph_size)):
-							mem[dph_addr + i] = (wdata >> i * 8) & 0xff
+							mem[(dph_addr & -4) + i] = (wdata >> i * 8) & 0xff
 
 			# Progress current address-phase request to data phase
 			dph_active = (yield dut.htrans) >> 1
@@ -60,12 +60,22 @@ def main(argv):
 			# Step the processor
 			yield
 
+		print(f"Ran for {i + 1} cycles")
+
+
 	dut = Hazard2CPU() # electric boogaloo
 	sim = Simulator(dut)
 	sim.add_sync_process(process)
 	sim.add_clock(1e-6)
 	with sim.write_vcd("test.vcd"):
 		sim.run()
+
+	for start, end in args.dump or []:
+		print(f"Dumping memory from {start:08x} to {end:08x}:")
+		for i, addr in enumerate(range(start, end)):
+			sep = "\n" if i % 16 == 15 else " "
+			sys.stdout.write(f"{mem[addr]:02x}{sep}")
+		print("")
 
 if __name__ == "__main__":
 	main(sys.argv[1:])

@@ -62,7 +62,7 @@ class Hazard2ALU(Elaboratable):
 
 	def elaborate(self, platform):
 		m = Module()
-		adder = Mux(self.op != ALUOp.ADD, self.i0 - self.i1, self.i0 + self.i1) - self.take4 * 4
+		adder = (Mux(self.op != ALUOp.ADD, self.i0 - self.i1, self.i0 + self.i1) - self.take4 * 4)[:XLEN]
 		less_than = Mux(msb(self.i0) == msb(self.i1), msb(adder),
 			Mux(self.op == ALUOp.LTU, msb(self.i1), msb(self.i0))
 		)

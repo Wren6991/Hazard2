@@ -1,0 +1,162 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Sun Apr 25 20:04:09 2021
+[*]
+[dumpfile] "/home/luke/proj/hazard2/sim/hello_asm/test.vcd"
+[dumpfile_mtime] "Sun Apr 25 20:02:31 2021"
+[dumpfile_size] 88575
+[savefile] "/home/luke/proj/hazard2/sim/hello_asm/test.gtkw"
+[timestart] 1830000
+[size] 1920 1043
+[pos] -1 -1
+*-22.000000 29320000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] top.
+[treeopen] top.regfile.
+[sst_width] 233
+[signals_width] 250
+[sst_expanded] 1
+[sst_vpaned_height] 298
+@28
+top.clk
+@200
+-
+@28
+top.d_dph_active
+top.i_dph_active
+@200
+-Bus
+@22
+top.haddr[31:0]
+@28
+top.htrans[1:0]
+top.hsize[2:0]
+top.hwrite
+top.hready
+@22
+top.hwdata[31:0]
+@c00022
+top.hrdata[31:0]
+@28
+(0)top.hrdata[31:0]
+(1)top.hrdata[31:0]
+(2)top.hrdata[31:0]
+(3)top.hrdata[31:0]
+(4)top.hrdata[31:0]
+(5)top.hrdata[31:0]
+(6)top.hrdata[31:0]
+(7)top.hrdata[31:0]
+(8)top.hrdata[31:0]
+(9)top.hrdata[31:0]
+(10)top.hrdata[31:0]
+(11)top.hrdata[31:0]
+(12)top.hrdata[31:0]
+(13)top.hrdata[31:0]
+(14)top.hrdata[31:0]
+(15)top.hrdata[31:0]
+(16)top.hrdata[31:0]
+(17)top.hrdata[31:0]
+(18)top.hrdata[31:0]
+(19)top.hrdata[31:0]
+(20)top.hrdata[31:0]
+(21)top.hrdata[31:0]
+(22)top.hrdata[31:0]
+(23)top.hrdata[31:0]
+(24)top.hrdata[31:0]
+(25)top.hrdata[31:0]
+(26)top.hrdata[31:0]
+(27)top.hrdata[31:0]
+(28)top.hrdata[31:0]
+(29)top.hrdata[31:0]
+(30)top.hrdata[31:0]
+(31)top.hrdata[31:0]
+@1401200
+-group_end
+@200
+-
+-Register Read
+@28
+top.regfile.ren
+@c00022
+top.regfile.raddr1[4:0]
+@28
+(0)top.regfile.raddr1[4:0]
+(1)top.regfile.raddr1[4:0]
+(2)top.regfile.raddr1[4:0]
+(3)top.regfile.raddr1[4:0]
+(4)top.regfile.raddr1[4:0]
+@1401200
+-group_end
+@22
+top.regfile.rdata1[31:0]
+@200
+-
+@22
+top.regfile.raddr2[4:0]
+@c00022
+top.regfile.rdata2[31:0]
+@28
+(0)top.regfile.rdata2[31:0]
+(1)top.regfile.rdata2[31:0]
+(2)top.regfile.rdata2[31:0]
+(3)top.regfile.rdata2[31:0]
+(4)top.regfile.rdata2[31:0]
+(5)top.regfile.rdata2[31:0]
+(6)top.regfile.rdata2[31:0]
+(7)top.regfile.rdata2[31:0]
+(8)top.regfile.rdata2[31:0]
+(9)top.regfile.rdata2[31:0]
+(10)top.regfile.rdata2[31:0]
+(11)top.regfile.rdata2[31:0]
+(12)top.regfile.rdata2[31:0]
+(13)top.regfile.rdata2[31:0]
+(14)top.regfile.rdata2[31:0]
+(15)top.regfile.rdata2[31:0]
+(16)top.regfile.rdata2[31:0]
+(17)top.regfile.rdata2[31:0]
+(18)top.regfile.rdata2[31:0]
+(19)top.regfile.rdata2[31:0]
+(20)top.regfile.rdata2[31:0]
+(21)top.regfile.rdata2[31:0]
+(22)top.regfile.rdata2[31:0]
+(23)top.regfile.rdata2[31:0]
+(24)top.regfile.rdata2[31:0]
+(25)top.regfile.rdata2[31:0]
+(26)top.regfile.rdata2[31:0]
+(27)top.regfile.rdata2[31:0]
+(28)top.regfile.rdata2[31:0]
+(29)top.regfile.rdata2[31:0]
+(30)top.regfile.rdata2[31:0]
+(31)top.regfile.rdata2[31:0]
+@1401200
+-group_end
+@200
+-
+-ALU
+@22
+top.alu.i0[31:0]
+top.alu.i1[31:0]
+top.alu.op[3:0]
+@28
+top.alu.take4
+@22
+top.alu.o[31:0]
+@28
+top.alu.cmp
+@200
+-
+-Register Write
+@28
+top.regfile.wen
+@22
+top.regfile.waddr[4:0]
+top.regfile.wdata[31:0]
+@200
+-
+-Decode
+@22
+top.pc[31:0]
+top.cir[31:0]
+@28
+top.cir_valid
+[pattern_trace] 1
+[pattern_trace] 0
