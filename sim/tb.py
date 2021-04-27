@@ -14,9 +14,10 @@ def anyint(x):
 
 def main(argv):
 	parser = argparse.ArgumentParser()
-	parser.add_argument("binfile")
-	parser.add_argument("--memsize", default = 1 << 24, type = anyint)
-	parser.add_argument("--cycles", default = int(1e4), type = anyint)
+	parser.add_argument("binfile"),
+	parser.add_argument("vcdfile", nargs="?")
+	parser.add_argument("--memsize", default=1 << 24, type = anyint)
+	parser.add_argument("--cycles", default=int(1e4), type = anyint)
 	parser.add_argument("--dump", nargs=2, action="append", type=anyint)
 	args = parser.parse_args(argv)
 	mem = bytearray(args.memsize)
@@ -67,7 +68,10 @@ def main(argv):
 	sim = Simulator(dut)
 	sim.add_sync_process(process)
 	sim.add_clock(1e-6)
-	with sim.write_vcd("test.vcd"):
+	if args.vcdfile is not None:
+		with sim.write_vcd(args.vcdfile):
+			sim.run()
+	else:
 		sim.run()
 
 	for start, end in args.dump or []:
