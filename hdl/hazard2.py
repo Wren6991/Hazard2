@@ -51,6 +51,32 @@ def imm_u(instr):
 def imm_j(instr):
 	return RCat(Repl(msb(instr), 12), instr[12:20], instr[20], instr[21:31], C(0, 1))
 
+
+class Hazard2Shifter(Elaboratable):
+	def __init__(self):
+		self.i     = Signal(XLEN)
+		self.shamt = Signal(range(XLEN))
+		self.right = Signal()
+		self.arith = Signal()
+		self.o     = Signal(XLEN)
+
+	def elaborate(self, platform):
+		m = Module()
+
+		accum = Signal(XLEN, name="shift_pre_reverse")
+		m.d.comb += accum.eq(Mux(self.right, self.i, self.i[::-1]))
+		for i in range(self.shamt.width):
+			accum_next = Signal(XLEN, name=f"shift_accum{i}")
+			m.d.comb += accum_next.eq(Mux(self.shamt[i],
+				Cat(accum[1 << i:], Repl(accum[-1] & self.arith, 1 << i)),
+				accum
+			))
+			accum = accum_next
+		m.d.comb += self.o.eq(Mux(self.right, accum, accum[::-1]))
+
+		return m
+
+
 class Hazard2ALU(Elaboratable):
 	def __init__(self):
 		self.i0    = Signal(XLEN)
@@ -62,7 +88,16 @@ class Hazard2ALU(Elaboratable):
 
 	def elaborate(self, platform):
 		m = Module()
-		adder = (Mux(self.op != ALUOp.ADD, self.i0 - self.i1, self.i0 + self.i1) - self.take4 * 4)[:XLEN]
+		m.submodules.shifter = shifter = Hazard2Shifter()
+
+		# Add/subtract i0 and i1, then subtract 4 if take4 is true. Use of 3-input adder
+		# encourages tools to implement as carry-save.
+		adder = sum((
+			self.i0,
+			self.i1 ^ Repl(self.op != ALUOp.ADD, XLEN),
+			RCat(Repl(self.take4, XLEN - 2), C(0, 1), self.op != ALUOp.ADD)
+		))[:XLEN]
+
 		less_than = Mux(msb(self.i0) == msb(self.i1), msb(adder),
 			Mux(self.op == ALUOp.LTU, msb(self.i1), msb(self.i0))
 		)
@@ -78,6 +113,13 @@ class Hazard2ALU(Elaboratable):
 			with m.Case():
 				m.d.comb += bitwise.eq(self.i0 ^ self.i1)
 
+		m.d.comb += [
+			shifter.i.eq(self.i0),
+			shifter.shamt.eq(self.i1),
+			shifter.right.eq(self.op != ALUOp.SLL),
+			shifter.arith.eq(self.op == ALUOp.SRA)
+		]
+
 		with m.Switch(self.op):
 			with m.Case(ALUOp.ADD):
 				m.d.comb += self.o.eq(adder)
@@ -88,11 +130,11 @@ class Hazard2ALU(Elaboratable):
 			with m.Case(ALUOp.LTU):
 				m.d.comb += self.o.eq(less_than)
 			with m.Case(ALUOp.SRL):
-				m.d.comb += self.o.eq(self.i0 >> self.i1[0:5])
+				m.d.comb += self.o.eq(shifter.o)
 			with m.Case(ALUOp.SRA):
-				m.d.comb += self.o.eq((self.i0.as_signed() >> self.i1[0:5]).as_unsigned())
+				m.d.comb += self.o.eq(shifter.o)
 			with m.Case(ALUOp.SLL):
-				m.d.comb += self.o.eq(self.i0 << self.i1[0:5])
+				m.d.comb += self.o.eq(shifter.o)
 			with m.Case():
 				m.d.comb += self.o.eq(bitwise)
 		return m
