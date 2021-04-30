@@ -2,10 +2,10 @@
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
 [*] Sun Apr 25 20:04:09 2021
 [*]
-[dumpfile] "/home/luke/proj/hazard2/sim/hello_asm/test.vcd"
+[dumpfile] "/home/luke/proj/hazard2/sim/hello_asm/hello_asm.vcd"
 [dumpfile_mtime] "Sun Apr 25 20:02:31 2021"
 [dumpfile_size] 88575
-[savefile] "/home/luke/proj/hazard2/sim/hello_asm/test.gtkw"
+[savefile] "/home/luke/proj/hazard2/sim/hello_asm/hello_asm.gtkw"
 [timestart] 1830000
 [size] 1920 1043
 [pos] -1 -1

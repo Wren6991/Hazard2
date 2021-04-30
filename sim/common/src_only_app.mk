@@ -21,7 +21,7 @@ MAX_CYCLES   ?= 100000
 all: run
 
 run: $(APP).bin
-	$(TBDIR)/tb.py $(APP).bin --cycles $(MAX_CYCLES)
+	$(TBDIR)/tb.py $(APP).bin $(APP).vcd --cycles $(MAX_CYCLES)
 
 view: run
 	gtkwave $(APP)_run.vcd
