@@ -29,27 +29,20 @@ class RVOpc(IntEnum):
 	JAL      = 0b11_011
 	SYSTEM   = 0b11_100
 
-def msb(val):
-	return val[-1]
-
-# Sorry my brain is wired this way now
-def RCat(*varg):
-	return Cat(reversed(varg))
-
 def imm_i(instr):
-	return RCat(Repl(msb(instr), 20), instr[20:])
+	return Cat(instr[20:], Repl(instr[-1], 20))
 
 def imm_s(instr):
-	return RCat(Repl(msb(instr), 20), instr[25:], instr[7:12])
+	return Cat(instr[7:12], instr[25:], Repl(instr[-1], 20))
 
 def imm_b(instr):
-	return RCat(Repl(msb(instr), 20), instr[7], instr[25:31], instr[8:12], C(0, 1))
+	return Cat(C(0, 1), instr[8:12],  instr[25:31], instr[7], Repl(instr[-1], 20))
 
 def imm_u(instr):
-	return RCat(instr[12:], C(0, 12))
+	return Cat(C(0, 12), instr[12:])
 
 def imm_j(instr):
-	return RCat(Repl(msb(instr), 12), instr[12:20], instr[20], instr[21:31], C(0, 1))
+	return Cat(C(0, 1), instr[21:31], instr[20], instr[12:20], Repl(instr[-1], 12))
 
 
 class Hazard2Shifter(Elaboratable):
@@ -95,11 +88,11 @@ class Hazard2ALU(Elaboratable):
 		adder = sum((
 			self.i0,
 			self.i1 ^ Repl(self.op != ALUOp.ADD, XLEN),
-			RCat(Repl(self.take4, XLEN - 2), C(0, 1), self.op != ALUOp.ADD)
+			Cat(self.op != ALUOp.ADD, C(0, 1), Repl(self.take4, XLEN - 2))
 		))[:XLEN]
 
-		less_than = Mux(msb(self.i0) == msb(self.i1), msb(adder),
-			Mux(self.op == ALUOp.LTU, msb(self.i1), msb(self.i0))
+		less_than = Mux(self.i0[-1] == self.i1[-1], adder[-1],
+			Mux(self.op == ALUOp.LTU, self.i1[-1], self.i0[-1])
 		)
 		m.d.comb += self.cmp.eq(Mux(self.op == ALUOp.SUB, self.i0 == self.i1, less_than))
 
@@ -222,10 +215,10 @@ class Hazard2CPU(Elaboratable):
 				m.d.comb += load_rdata.eq(self.hrdata)
 			with m.Case(1):
 				hword_rdata = self.hrdata.word_select(d_dph_addr[1:], 16)
-				m.d.comb += load_rdata.eq(RCat(Repl(msb(hword_rdata) & d_dph_signed, XLEN - 16), hword_rdata))
+				m.d.comb += load_rdata.eq(Cat(hword_rdata, Repl(hword_rdata[-1] & d_dph_signed, XLEN - 16)))
 			with m.Case():
 				byte_rdata = self.hrdata.word_select(d_dph_addr, 8)
-				m.d.comb += load_rdata.eq(RCat(Repl(msb(byte_rdata) & d_dph_signed, XLEN - 8), byte_rdata))
+				m.d.comb += load_rdata.eq(Cat(byte_rdata, Repl(byte_rdata[-1] & d_dph_signed, XLEN - 8)))
 
 		### Stage D/X ###
 
@@ -317,7 +310,7 @@ class Hazard2CPU(Elaboratable):
 		# that we have the pedal to the metal all the time.
 		bus_available = Signal()
 		m.d.sync += bus_available.eq(1)
-		m.d.comb += self.htrans.eq(RCat(bus_available, C(0, 1)))
+		m.d.comb += self.htrans.eq(bus_available << 1)
 
 		agu_next_addr = Signal(XLEN)
 
@@ -347,7 +340,7 @@ class Hazard2CPU(Elaboratable):
 		with m.If(access_is_loadstore):
 			m.d.comb += [
 				self.hwrite.eq(access_is_store),
-				self.hsize.eq(RCat(C(0, 1), funct3[:2]))
+				self.hsize.eq(funct3[:2])
 			]
 		with m.Else():
 			m.d.comb += [
@@ -382,11 +375,11 @@ class Hazard2CPU(Elaboratable):
 			with m.Case(0):
 				m.d.comb += self.hwdata.eq(rs2)
 			with m.Case(1):
-				m.d.comb += self.hwdata.eq(RCat(rs2[16:], rs2[:8], rs2[:8]))
+				m.d.comb += self.hwdata.eq(Cat(rs2[:8], rs2[:8], rs2[16:]))
 			with m.Case(2):
-				m.d.comb += self.hwdata.eq(RCat(rs2[:16], rs2[:16]))
+				m.d.comb += self.hwdata.eq(Cat(rs2[:16], rs2[:16]))
 			with m.Case(3):
-				m.d.comb += self.hwdata.eq(RCat(rs2[:8], rs2[:24]))
+				m.d.comb += self.hwdata.eq(Cat(rs2[:24], rs2[:8]))
 
 		# Register file
 
