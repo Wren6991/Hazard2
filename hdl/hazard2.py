@@ -178,6 +178,7 @@ class Hazard2Regfile(Elaboratable):
 		]
 		return m
 
+
 class Hazard2CPU(Elaboratable):
 	def __init__(self, reset_vector=0x0):
 		self.reset_vector = reset_vector
@@ -322,18 +323,30 @@ class Hazard2CPU(Elaboratable):
 		take_jal = cir_valid & ~d_dph_active & (opc == RVOpc.JAL)
 		take_jalr = cir_valid & ~d_dph_active & (opc == RVOpc.JALR)
 
+		agu_op0 = Signal(XLEN)
+		agu_op1 = Signal(XLEN)
+		agu_offs = Signal(XLEN)
+
 		with m.If(access_is_load):
-			m.d.comb += agu_next_addr.eq(rs1 + imm_i(cir))
+			m.d.comb += [agu_op0.eq(rs1), agu_op1.eq(imm_i(cir))]
 		with m.Elif(access_is_store):
-			m.d.comb += agu_next_addr.eq(rs1 + imm_s(cir))
+			m.d.comb += [agu_op0.eq(rs1), agu_op1.eq(imm_s(cir))]
 		with m.Elif(take_branch):
-			m.d.comb += agu_next_addr.eq(pc - 4 + imm_b(cir))
+			m.d.comb += [agu_op0.eq(pc), agu_op1.eq(imm_b(cir))]
 		with m.Elif(take_jal):
-			m.d.comb += agu_next_addr.eq(pc - 4 + imm_j(cir))
+			m.d.comb += [agu_op0.eq(pc), agu_op1.eq(imm_j(cir))]
 		with m.Elif(take_jalr):
-			m.d.comb += agu_next_addr.eq((rs1 + imm_i(cir)) & -2)
+			m.d.comb += [agu_op0.eq(rs1), agu_op1.eq(imm_i(cir))]
 		with m.Else():
-			m.d.comb += agu_next_addr.eq(pc + 4)
+			m.d.comb += [agu_op0.eq(pc), agu_op1.eq(0)]
+
+		# Offset of +/-4 applied via third adder input (which tools will likely implement as carry-save)
+		m.d.comb += agu_offs.eq(Cat(
+			C(0, 2), 
+			((take_branch | take_jal) & ~access_is_loadstore) | ~(access_is_loadstore | take_jalr),
+			Repl((take_branch | take_jal) & ~access_is_loadstore, 29)
+		))
+		m.d.comb += agu_next_addr.eq(agu_op0 + agu_op1 + agu_offs)
 
 		# Generate address-phase request
 		m.d.comb += self.haddr.eq(agu_next_addr)
