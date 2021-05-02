@@ -1,0 +1,29 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Sat May  1 16:03:30 2021
+[*]
+[dumpfile] "/home/luke/proj/hazard2/sim/blinky/blinky.vcd"
+[dumpfile_mtime] "Sat May  1 16:01:40 2021"
+[dumpfile_size] 9570
+[savefile] "/home/luke/proj/hazard2/sim/blinky/blinky.gtkw"
+[timestart] 2290000
+[size] 1000 600
+[pos] -1 -1
+*-21.000000 4850000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 233
+[signals_width] 126
+[sst_expanded] 1
+[sst_vpaned_height] 144
+@22
+top.haddr[31:0]
+@28
+top.htrans[1:0]
+top.hwrite
+top.hsize[2:0]
+top.hready
+@22
+top.hwdata[31:0]
+@23
+top.hrdata[31:0]
+[pattern_trace] 1
+[pattern_trace] 0

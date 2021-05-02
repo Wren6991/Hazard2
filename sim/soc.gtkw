@@ -1,0 +1,53 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Sat May  1 15:15:01 2021
+[*]
+[dumpfile] "/home/luke/proj/hazard2/sim/soc.vcd"
+[dumpfile_mtime] "Sat May  1 15:11:16 2021"
+[dumpfile_size] 286797
+[savefile] "/home/luke/proj/hazard2/sim/soc.gtkw"
+[timestart] 0
+[size] 2560 1403
+[pos] -39 -39
+*-30.000000 2399000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] top.
+[sst_width] 233
+[signals_width] 126
+[sst_expanded] 1
+[sst_vpaned_height] 423
+@200
+-CPU Bus
+@22
+top.cpu.haddr[31:0]
+@28
+top.cpu.htrans[1:0]
+top.cpu.hsize[2:0]
+top.cpu.hwrite
+top.cpu.hready
+@22
+top.cpu.hwdata[31:0]
+top.cpu.hrdata[31:0]
+@200
+-
+-SRAM Bus
+@28
+top.ram.htrans[1:0]
+top.ram.hsize[2:0]
+top.ram.hwrite
+top.ram.hready_resp
+top.ram.hready
+@22
+top.ram.hwdata[31:0]
+top.ram.hrdata[31:0]
+@200
+-
+-LED Bus
+@28
+top.led.htrans[1:0]
+@22
+top.led.haddr[31:0]
+@28
+top.led.hready_resp
+top.led.hready
+[pattern_trace] 1
+[pattern_trace] 0

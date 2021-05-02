@@ -1,7 +1,7 @@
 TEST = add-01
 TEST_ARCH = I
 BIN_ARCH = rv32i
-SIM_EXEC = ../tb.py
+SIM_EXEC = ../tb_cpu.py
 
 CROSS_PREFIX = /opt/riscv/bin/riscv32-unknown-elf-
 
@@ -46,7 +46,7 @@ TESTLIST= \
   xori-01
 
 .PHONY: all testlist clean $(addprefix test-,$(TESTLIST))
-all: test-add-01
+all: testlist
 
 define make-test-target
   # Turns out variable expansions inside functions don't work like I thought they did. Oh well this will do
