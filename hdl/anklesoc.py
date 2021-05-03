@@ -208,10 +208,10 @@ class AHBLFlashXIP(Elaboratable):
 		SERIAL_READ_CMD = 0x03
 		FLASH_ADDR_WIDTH = 24
 
-		addr_sreg = Signal(FLASH_ADDR_WIDTH + 8)
-		data_sreg = Signal(self._dwidth)
-		shift_ctr = Signal(range(max(FLASH_ADDR_WIDTH + 8, self._dwidth)))
-		m.d.comb += self.pad_mosi.eq(addr_sreg[-1])
+		sreg_width = max(FLASH_ADDR_WIDTH + 8, self._dwidth)
+		sreg = Signal(sreg_width)
+		shift_ctr = Signal(range(sreg_width))
+		m.d.comb += self.pad_mosi.eq(sreg[FLASH_ADDR_WIDTH + 8 - 1])
 
 		bus_addr_mask = -1 << log2_int(self._dwidth // 8)
 		cmd_plus_addr = Cat(
@@ -225,14 +225,14 @@ class AHBLFlashXIP(Elaboratable):
 					m.next = "CMD/ADDR"
 					m.d.sync += [
 						self.pad_cs.eq(0),
-						addr_sreg.eq(cmd_plus_addr),
+						sreg.eq(cmd_plus_addr),
 						shift_ctr.eq(FLASH_ADDR_WIDTH + 8 - 1)
 					]
 			with m.State("CMD/ADDR"):
 				m.d.sync += self.pad_sck.eq(~self.pad_sck)
 				with m.If(self.pad_sck):
 					m.d.sync += [
-						addr_sreg.eq(addr_sreg << 1),
+						sreg.eq(sreg << 1),
 						shift_ctr.eq(shift_ctr - 1)
 					]
 				with m.If(self.pad_sck & ~shift_ctr.any()):
@@ -243,7 +243,7 @@ class AHBLFlashXIP(Elaboratable):
 				with m.If(self.pad_sck):
 					m.d.sync += shift_ctr.eq(shift_ctr - 1)
 				with m.Else():
-					m.d.sync += data_sreg.eq((data_sreg << 1) | self.pad_miso)
+					m.d.sync += sreg.eq((sreg << 1) | self.pad_miso)
 				with m.If(self.pad_sck & ~shift_ctr.any()):
 					m.next = "BACKPORCH"
 			with m.State("BACKPORCH"):
@@ -254,7 +254,7 @@ class AHBLFlashXIP(Elaboratable):
 
 		# Endianness swap
 		m.d.comb += self.bus.hrdata.eq(Cat(
-			data_sreg.word_select(i, 8) for i in reversed(range(self._dwidth // 8))
+			sreg.word_select(i, 8) for i in reversed(range(self._dwidth // 8))
 		))
 		return m
 
@@ -263,10 +263,13 @@ class AnkleSoC(Elaboratable):
 	"""
 	AnkleSoC -- the smallest useful sock
 	"""
-	def __init__(self, ram_size_bytes=4096, ram_init=None):
+	def __init__(self, ram_size_bytes=4096, ram_init=None, n_leds=5):
 		self._ram_size_bytes = ram_size_bytes
 		self._ram_init = ram_init
-		self._n_leds = 5
+		self._n_leds = n_leds
+		# Testbench-only signals:
+		self.flash = None
+		self.leds = None
 
 	def elaborate(self, platform):
 		m = Module()
@@ -301,8 +304,12 @@ class AnkleSoC(Elaboratable):
 		]
 
 		# IO hookup
-		leds = Cat(platform.request("led", i) for i in range(5))
-		flash = platform.request("spi_flash_1x")
+		if platform is None:
+			self.leds = leds = Signal(5)
+			self.flash = flash = Record((("mosi", 1), ("miso", 1), ("clk", 1), ("cs", 1)))
+		else:
+			leds = Cat(platform.request("led", i) for i in range(self._n_leds))
+			flash = platform.request("spi_flash_1x")
 		m.d.comb += [
 			leds.eq(led.leds),
 			flash.cs.eq(xip.pad_cs),

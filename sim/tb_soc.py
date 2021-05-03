@@ -47,7 +47,6 @@ class SPIFlash:
 		self.prev_miso = miso
 		return miso
 
-
 def main(argv):
 	parser = argparse.ArgumentParser()
 	parser.add_argument("binfile"),
@@ -63,8 +62,8 @@ def main(argv):
 
 	def process():
 		for i in range(args.cycles):
-			yield dut.flash_miso.eq(flash.step(
-				(yield dut.flash_cs), (yield dut.flash_sck), (yield dut.flash_mosi)
+			yield dut.flash.miso.eq(flash.step(
+				(yield dut.flash.cs), (yield dut.flash.clk), (yield dut.flash.mosi)
 			))
 			yield
 
