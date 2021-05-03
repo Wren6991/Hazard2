@@ -12,16 +12,20 @@ AnkleSoC is a tiny SoC to support Hazard2 running on a Lattice iCEStick developm
 
 ![](doc/anklesoc_logo.png)
 
-Currently this contains, as a proof of concept:
+Currently this contains:
 
 - A Hazard2 CPU instance
-- A RAM with AHB-Lite interface
-- A memory-mapped register for blinking LEDs
+- 4kB RAM with AHB-Lite interface
+- SPI flash serial execute-in-place interface
+- 1kB direct-mapped cache for faster execution from flash
+- Memory-mapped registers for blinking LEDs and toggling a soft UART pin
 - An AHB-Lite splitter for connecting these components together
 
-Logic utilisation is 89%, so there is room for more peripheral support. The current iteration is just a first attempt at synthesising the processor and running some code on FPGA.
+![](doc/anklesoc_arch.png)
 
-AnkleSoC runs at around 29 MHz with a 1 kB main SRAM, and probably slightly slower with larger RAM, as the critical path is the processor address setup, through the ALU comparison and the AGU.
+This uses 1271/1280 logic cells and 15/16 block RAMs on the HX1K. I would like to expand the peripherals a little, but this will require some LUT golf.
+
+AnkleSoC runs at around 30 MHz (may close slightly higher or lower depending on PnR seed). The critical path is processor address setup, going through the ALU comparison and the AGU, then through address decode to the SRAM read clock enable.
 
 nMigen made this an absolute pleasure -- for example, the `AHBLSRAM` class can accept a `bytes()` binary object for the RAM initialisation vector, and convert this to LE32 format during elaboration. The software build system does not have to know the memory geometry, and this would be the same for initialising memories with more complex geometries, like preloading a first stage bootloader into an instruction cache.
 
