@@ -1,24 +1,28 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Mon May  3 14:38:47 2021
+[*] Mon May  3 19:47:32 2021
 [*]
 [dumpfile] "/home/luke/proj/hazard2/sim/soc.vcd"
-[dumpfile_mtime] "Mon May  3 14:32:22 2021"
-[dumpfile_size] 844547
+[dumpfile_mtime] "Mon May  3 19:46:38 2021"
+[dumpfile_size] 81446001
 [savefile] "/home/luke/proj/hazard2/sim/soc.gtkw"
-[timestart] 113060000
-[size] 1920 1043
+[timestart] 0
+[size] 2560 1403
 [pos] -1 -1
-*-22.000000 127400000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-32.980850 23730000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] top.
+[treeopen] top.cpu.
+[treeopen] top.cpu.regfile.
+[treeopen] top.ram.
 [treeopen] top.xip.
 [sst_width] 233
-[signals_width] 166
+[signals_width] 238
 [sst_expanded] 1
-[sst_vpaned_height] 423
+[sst_vpaned_height] 601
 @200
 -CPU Bus
 @22
+top.cpu.regfile.rport1.memory(10)[31:0]
 top.cpu.haddr[31:0]
 @28
 top.cpu.htrans[1:0]
@@ -31,6 +35,8 @@ top.cpu.hrdata[31:0]
 @200
 -
 -SRAM Bus
+@22
+top.cpu.haddr[31:0]
 @28
 top.ram.htrans[1:0]
 top.ram.hsize[2:0]
@@ -40,6 +46,18 @@ top.ram.hready
 @22
 top.ram.hwdata[31:0]
 top.ram.hrdata[31:0]
+@200
+-
+@22
+top.ram.rport.mem_r_addr[9:0]
+@28
+top.ram.rport.mem_r_en
+@22
+top.ram.rport.mem_r_data[31:0]
+@23
+top.ram.wport.mem_w_en[3:0]
+@22
+top.ram.wport.mem_w_data[31:0]
 @200
 -
 -LED Bus
@@ -66,18 +84,21 @@ top.xip.fsm_state
 top.xip.cache_hit
 @200
 -
-@201
 -Cache TMem
 @22
 top.xip.trport.tmem_r_addr[7:0]
-top.xip.trport.tmem_r_data[14:0]
 @28
 top.xip.trport.tmem_r_en
 @22
+top.xip.tmem_rtag[13:0]
+@28
+top.xip.tmem_rvalid
+@22
 top.xip.twport.tmem_w_addr[7:0]
-top.xip.twport.tmem_w_data[14:0]
 @28
 top.xip.twport.tmem_w_en
+@22
+top.xip.twport.tmem_w_data[14:0]
 @200
 -
 -Cache DMem
@@ -99,8 +120,16 @@ top.xip.drport.dmem_r_en
 @22
 top.xip.drport.dmem_r_data[31:0]
 top.xip.dwport.dmem_w_addr[7:0]
-top.xip.dwport.dmem_w_data[31:0]
 @28
 top.xip.dwport.dmem_w_en
+@22
+top.xip.dwport.dmem_w_data[31:0]
+@200
+-
+-IO
+@22
+top.leds[4:0]
+@28
+top.uart__tx
 [pattern_trace] 1
 [pattern_trace] 0

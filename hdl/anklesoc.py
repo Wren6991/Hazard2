@@ -162,7 +162,7 @@ class AHBLSRAM(Elaboratable):
 			m.d.sync += addr_dph.eq(addr_aph)
 			m.d.sync += [
 				write_dph.eq(write_aph),
-				write_byte_en.eq((1 << (1 << self.bus.hsize)) - 1 << addr_aph[:bytesel_width])
+				write_byte_en.eq((1 << (1 << self.bus.hsize)) - 1 << self.bus.haddr[:bytesel_width])
 			]
 		m.d.sync += delayed_read_dph.eq(read_aph & write_dph)
 
@@ -210,12 +210,14 @@ class AHBLFlashXIP(Elaboratable):
 		self._tag_width = self.FLASH_ADDR_WIDTH - (self._index_width + self._offset_width)
 		# We can use smaller tags/comparisons if the downstream flash is smaller than 16 MB.
 		self._tag_mask = (1 << log2_int(flash_size_bytes // cache_size_bytes)) - 1
+		self._flash_size_bytes = flash_size_bytes
 
 		self.tmem = Memory(width=self._tag_width + 1, depth=self._depth, init=[0] * self._depth)
 		self.dmem = Memory(width=self._dwidth, depth=self._depth)
 
 		self.bus = AHBLPort(awidth, dwidth)
-		self.pad_cs   = Signal(reset=1)
+		# Using active-high chip select convention, to match nMigen platform code
+		self.pad_cs   = Signal()
 		self.pad_sck  = Signal()
 		self.pad_mosi = Signal()
 		self.pad_miso = Signal()
@@ -228,7 +230,7 @@ class AHBLFlashXIP(Elaboratable):
 		shift_ctr = Signal(range(sreg.width))
 		m.d.comb += self.pad_mosi.eq(sreg[self.FLASH_ADDR_WIDTH + 8 - 1])
 
-		bus_addr_mask = -1 << self._offset_width
+		bus_addr_mask = (1 << log2_int(self._flash_size_bytes)) - (1 << self._offset_width)
 		cmd_plus_addr = Cat(
 			(self.bus.haddr & bus_addr_mask)[:self.FLASH_ADDR_WIDTH],
 			C(self.SERIAL_READ_CMD, 8)
@@ -303,7 +305,7 @@ class AHBLFlashXIP(Elaboratable):
 				with m.Else():
 					m.next = "CMD/ADDR"
 					m.d.sync += [
-						self.pad_cs.eq(0),
+						self.pad_cs.eq(1),
 						shift_ctr.eq(self.FLASH_ADDR_WIDTH + 8 - 1)
 					]
 			with m.State("CMD/ADDR"):
@@ -325,7 +327,7 @@ class AHBLFlashXIP(Elaboratable):
 				with m.If(self.pad_sck & ~shift_ctr.any()):
 					m.next = "BACKPORCH"
 			with m.State("BACKPORCH"):
-				m.d.sync += self.pad_cs.eq(1)
+				m.d.sync += self.pad_cs.eq(0)
 				# dmem readback happens this cycle, so the aph read can't take place until
 				# the next cycle. This means we must return to the idle state so aph read
 				# can take place there, we can't skip straight to HIT/MISS of next access.

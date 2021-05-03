@@ -14,11 +14,12 @@ def anyint(x):
 	return int(x, 0)
 
 class SPIFlash:
-	def __init__(self, image):
+	def __init__(self, image, base=0):
 		if image is None:
 			self.image = bytes()
 		else:
 			self.image = image
+		self.base = base
 		self.addr_bit_count = 0
 		self.data_bit_count = 0
 		self.read_addr = 0
@@ -28,7 +29,7 @@ class SPIFlash:
 		miso = self.prev_miso
 		sck_edge = sck and not self.prev_sck
 		self.prev_sck = sck
-		if cs:
+		if not cs:
 			self.addr_bit_count = 0
 			self.data_bit_count = 0
 			self.read_addr = 0
@@ -41,8 +42,9 @@ class SPIFlash:
 			if self.addr_bit_count == 32:
 				# Ignore command bits, assume it's a 03h serial read
 				self.read_addr &= (1 << 24) - 1
-				if self.read_addr < len(self.image):
-					miso = (self.image[self.read_addr] >> (7 - self.data_bit_count)) & 1
+				read_addr_adjusted = self.read_addr - self.base
+				if 0 <= read_addr_adjusted < len(self.image):
+					miso = (self.image[read_addr_adjusted] >> (7 - self.data_bit_count)) & 1
 				self.data_bit_count += 1
 				if self.data_bit_count == 8:
 					self.data_bit_count = 0
@@ -53,6 +55,7 @@ class SPIFlash:
 def main(argv):
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--flashload", "-f", help="Optional binary file to preload flash")
+	parser.add_argument("--flashload-base", default=0, type=anyint, help="Start address for the flash image")
 	parser.add_argument("--ramload", "-r", help="Optional binary file to preload RAM")
 	parser.add_argument("--vcdfile", "-v", help="Optional VCD file to write simulation trace")
 	parser.add_argument("--memsize", default=4096, type=anyint)
@@ -68,7 +71,7 @@ def main(argv):
 		ram_img = open(args.ramload, "rb").read()
 
 	dut = AnkleSoC(args.memsize, ram_init=ram_img, cpu_reset_vector=args.resetvector)
-	flash = SPIFlash(flash_img)
+	flash = SPIFlash(flash_img, base=args.flashload_base - 0x400000 if args.flashload_base is not None else 0)
 
 	def process():
 		for i in range(args.cycles):

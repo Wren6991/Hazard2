@@ -18,7 +18,7 @@ def main(argv):
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--ramload", "-r", help="Optional binary file to preload RAM")
 	parser.add_argument("--memsize", default=4096, type=anyint)
-	parser.add_argument("--resetvector", type=anyint)
+	parser.add_argument("--resetvector", default=0x440000, type=anyint)
 	parser.add_argument("--program", "-p", action="store_true")
 
 	args = parser.parse_args(argv)
