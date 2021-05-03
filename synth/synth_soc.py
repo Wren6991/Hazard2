@@ -16,14 +16,17 @@ def anyint(x):
 
 def main(argv):
 	parser = argparse.ArgumentParser()
-	parser.add_argument("binfile"),
+	parser.add_argument("--ramload", "-r", help="Optional binary file to preload RAM")
 	parser.add_argument("--memsize", default=4096, type=anyint)
+	parser.add_argument("--resetvector", type=anyint)
 	parser.add_argument("--program", "-p", action="store_true")
 
 	args = parser.parse_args(argv)
-	mem_init = open(args.binfile, "rb").read()
-	top = AnkleSoC(ram_size_bytes=args.memsize, ram_init=mem_init)
-	ICEStickPlatform().build(top, program=args.program)
+	mem_init = None
+	if args.ramload is not None:
+		mem_init = open(args.ramload, "rb").read()
+	top = AnkleSoC(ram_size_bytes=args.memsize, ram_init=mem_init, cpu_reset_vector=args.resetvector)
+	ICEStickPlatform().build(top, program=args.program, synth_opts="-abc2")
 
 if __name__ == "__main__":
 	main(sys.argv[1:])

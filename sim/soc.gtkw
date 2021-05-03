@@ -1,18 +1,19 @@
 [*]
 [*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
-[*] Sun May  2 20:33:11 2021
+[*] Mon May  3 14:38:47 2021
 [*]
 [dumpfile] "/home/luke/proj/hazard2/sim/soc.vcd"
-[dumpfile_mtime] "Sun May  2 20:32:23 2021"
-[dumpfile_size] 462761
+[dumpfile_mtime] "Mon May  3 14:32:22 2021"
+[dumpfile_size] 844547
 [savefile] "/home/luke/proj/hazard2/sim/soc.gtkw"
-[timestart] 0
+[timestart] 113060000
 [size] 1920 1043
 [pos] -1 -1
-*-30.000000 0 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-22.000000 127400000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] top.
+[treeopen] top.xip.
 [sst_width] 233
-[signals_width] 126
+[signals_width] 166
 [sst_expanded] 1
 [sst_vpaned_height] 423
 @200
@@ -51,12 +52,55 @@ top.led.hready_resp
 top.led.hready
 @200
 -
-@201
 -Flash SPI
 @28
-top.flash_cs
-top.flash_miso
-top.flash_mosi
-top.flash_sck
+top.pad_cs
+top.pad_mosi
+top.pad_sck
+top.pad_miso
+@200
+-
+-Cache FSM
+@28
+top.xip.fsm_state
+top.xip.cache_hit
+@200
+-
+@201
+-Cache TMem
+@22
+top.xip.trport.tmem_r_addr[7:0]
+top.xip.trport.tmem_r_data[14:0]
+@28
+top.xip.trport.tmem_r_en
+@22
+top.xip.twport.tmem_w_addr[7:0]
+top.xip.twport.tmem_w_data[14:0]
+@28
+top.xip.twport.tmem_w_en
+@200
+-
+-Cache DMem
+@c00022
+top.xip.drport.dmem_r_addr[7:0]
+@28
+(0)top.xip.drport.dmem_r_addr[7:0]
+(1)top.xip.drport.dmem_r_addr[7:0]
+(2)top.xip.drport.dmem_r_addr[7:0]
+(3)top.xip.drport.dmem_r_addr[7:0]
+(4)top.xip.drport.dmem_r_addr[7:0]
+(5)top.xip.drport.dmem_r_addr[7:0]
+(6)top.xip.drport.dmem_r_addr[7:0]
+(7)top.xip.drport.dmem_r_addr[7:0]
+@1401200
+-group_end
+@28
+top.xip.drport.dmem_r_en
+@22
+top.xip.drport.dmem_r_data[31:0]
+top.xip.dwport.dmem_w_addr[7:0]
+top.xip.dwport.dmem_w_data[31:0]
+@28
+top.xip.dwport.dmem_w_en
 [pattern_trace] 1
 [pattern_trace] 0

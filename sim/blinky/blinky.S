@@ -2,11 +2,9 @@
 .option norelax
 .option norvc
 
-#define SYS_CLK_KHZ 12000
+#include "platform_defs.h"
 
-#define LED_BASE 0x80000000
 #define BLINK_PERIOD_MS 200
-#define N_LEDS 5
 
 .section .vectors, "ax"
 

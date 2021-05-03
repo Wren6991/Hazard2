@@ -15,7 +15,10 @@ def anyint(x):
 
 class SPIFlash:
 	def __init__(self, image):
-		self.image = image
+		if image is None:
+			self.image = bytes()
+		else:
+			self.image = image
 		self.addr_bit_count = 0
 		self.data_bit_count = 0
 		self.read_addr = 0
@@ -49,16 +52,23 @@ class SPIFlash:
 
 def main(argv):
 	parser = argparse.ArgumentParser()
-	parser.add_argument("binfile"),
-	parser.add_argument("vcdfile", nargs="?")
-	parser.add_argument("--memsize", default=1 << 10, type = anyint)
-	parser.add_argument("--cycles", default=int(1e4), type = anyint)
+	parser.add_argument("--flashload", "-f", help="Optional binary file to preload flash")
+	parser.add_argument("--ramload", "-r", help="Optional binary file to preload RAM")
+	parser.add_argument("--vcdfile", "-v", help="Optional VCD file to write simulation trace")
+	parser.add_argument("--memsize", default=4096, type=anyint)
+	parser.add_argument("--cycles", default=int(1e4), type=anyint)
+	parser.add_argument("--resetvector", type=anyint)
 
 	args = parser.parse_args(argv)
-	mem_init = open(args.binfile, "rb").read()
+	flash_img = None
+	if args.flashload is not None:
+		flash_img = open(args.flashload, "rb").read()
+	ram_img = None
+	if args.ramload is not None:
+		ram_img = open(args.ramload, "rb").read()
 
-	dut = AnkleSoC(args.memsize)
-	flash = SPIFlash(mem_init)
+	dut = AnkleSoC(args.memsize, ram_init=ram_img, cpu_reset_vector=args.resetvector)
+	flash = SPIFlash(flash_img)
 
 	def process():
 		for i in range(args.cycles):

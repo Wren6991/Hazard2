@@ -159,13 +159,12 @@ class AHBLSRAM(Elaboratable):
 
 		# AHBL state transitions and address-phase capture
 		with m.If(self.bus.hready):
-			with m.If(write_aph | (read_aph & write_dph)):
-				m.d.sync += addr_dph.eq(addr_aph)
+			m.d.sync += addr_dph.eq(addr_aph)
 			m.d.sync += [
 				write_dph.eq(write_aph),
-				delayed_read_dph.eq(read_aph & write_dph),
 				write_byte_en.eq((1 << (1 << self.bus.hsize)) - 1 << addr_aph[:bytesel_width])
 			]
+		m.d.sync += delayed_read_dph.eq(read_aph & write_dph)
 
 		# SRAM control decode
 		sram_addr = Mux(write_dph | delayed_read_dph, addr_dph, addr_aph)
@@ -188,14 +187,32 @@ class AHBLSRAM(Elaboratable):
 
 class AHBLFlashXIP(Elaboratable):
 	"""
-	Tiny flash execute-in-place interface. Always perform 03h serial read
-	commands with size equal to the bus width, and address aligned down to bus
-	width, regardless of read HSIZE. SCK runs at half the sync domain clock
-	frequency.
+	Tiny flash execute-in-place interface, with direct-mapped read-only cache,
+	zero-wait-state read hit. A 1 kB cache is the smallest efficient size on
+	iCE40: this uses two BRAMs for the 256x32b data memory, and one BRAM for the
+	256x15b tag memory (so only ~2% of the 3 BRAMs are wasted).
+
+	On cache miss, always perform 03h serial read commands with size equal to the
+	bus width, and address aligned down to bus width, regardless of read HSIZE.
+	SCK runs at half the sync domain clock frequency.
 	"""
-	def __init__(self, awidth, dwidth):
+
+	SERIAL_READ_CMD = 0x03
+	FLASH_ADDR_WIDTH = 24
+
+	def __init__(self, awidth, dwidth, cache_size_bytes=1024, flash_size_bytes=16*1024*1024):
 		self._awidth = awidth
 		self._dwidth = dwidth
+
+		self._depth = cache_size_bytes // (dwidth // 8)
+		self._index_width = log2_int(self._depth)
+		self._offset_width = log2_int(dwidth // 8)
+		self._tag_width = self.FLASH_ADDR_WIDTH - (self._index_width + self._offset_width)
+		# We can use smaller tags/comparisons if the downstream flash is smaller than 16 MB.
+		self._tag_mask = (1 << log2_int(flash_size_bytes // cache_size_bytes)) - 1
+
+		self.tmem = Memory(width=self._tag_width + 1, depth=self._depth, init=[0] * self._depth)
+		self.dmem = Memory(width=self._dwidth, depth=self._depth)
 
 		self.bus = AHBLPort(awidth, dwidth)
 		self.pad_cs   = Signal(reset=1)
@@ -203,30 +220,91 @@ class AHBLFlashXIP(Elaboratable):
 		self.pad_mosi = Signal()
 		self.pad_miso = Signal()
 
+
 	def elaborate(self, platform):
 		m = Module()
-		SERIAL_READ_CMD = 0x03
-		FLASH_ADDR_WIDTH = 24
 
-		sreg_width = max(FLASH_ADDR_WIDTH + 8, self._dwidth)
-		sreg = Signal(sreg_width)
-		shift_ctr = Signal(range(sreg_width))
-		m.d.comb += self.pad_mosi.eq(sreg[FLASH_ADDR_WIDTH + 8 - 1])
+		sreg = Signal(max(self.FLASH_ADDR_WIDTH + 8, self._dwidth))
+		shift_ctr = Signal(range(sreg.width))
+		m.d.comb += self.pad_mosi.eq(sreg[self.FLASH_ADDR_WIDTH + 8 - 1])
 
-		bus_addr_mask = -1 << log2_int(self._dwidth // 8)
+		bus_addr_mask = -1 << self._offset_width
 		cmd_plus_addr = Cat(
-			(self.bus.haddr & bus_addr_mask)[:FLASH_ADDR_WIDTH],
-			C(SERIAL_READ_CMD, 8)
+			(self.bus.haddr & bus_addr_mask)[:self.FLASH_ADDR_WIDTH],
+			C(self.SERIAL_READ_CMD, 8)
 		)
+
+		# Decode bus controls, and capture useful address bits for data phase
+
+		aph_read = self.bus.htrans[1] & self.bus.hready & ~self.bus.hwrite
+
+		aph_offset = Signal(self._offset_width)
+		aph_index = Signal(self._index_width)
+		aph_tag = Signal(self._tag_width)
+		m.d.comb += Cat(aph_offset, aph_index, aph_tag).eq(self.bus.haddr)
+
+		# The tag is only needed on the first dphase cycle, to check for hit, and
+		# install the new tag on miss. This means we can get away with snooping it
+		# from the SPI shift register. The index is required post-shift, for data
+		# writeback, so needs to be registered separately.
+		dph_tag = sreg[self.FLASH_ADDR_WIDTH - self._tag_width:self.FLASH_ADDR_WIDTH]
+		dph_index = Signal(self._index_width)
+		with m.If(aph_read):
+			m.d.sync += [
+				sreg.eq(cmd_plus_addr),
+				dph_index.eq(aph_index)
+			]
+
+		# Instantiate and hookup memory ports
+
+		m.submodules.twport = twport = self.tmem.write_port()
+		m.submodules.trport = trport = self.tmem.read_port(transparent=False)
+		m.submodules.dwport = dwport = self.dmem.write_port()
+		m.submodules.drport = drport = self.dmem.read_port(transparent=False)
+
+		tmem_rvalid = Signal()
+		tmem_rtag = Signal(self._tag_width)
+		sreg_endian_swap = Cat(
+			sreg.word_select(i, 8) for i in reversed(range(self._dwidth // 8))
+		)
+
+		# dmem may be read twice: once when entering HIT/MISS state to speculatively
+		# pull out the hit data, and once after data writeback (on miss) to pull out
+		# the fresh read data onto hrdata. Note the second read costs us a cycle on
+		# miss, and costs 8 muxes to get two different addresses into the read port
+		# (assuming 1kB cache), but it saves 32 muxes (!) on hrdata, so worth it.
+		dmem_read_in_dph = Signal()
+
+		m.d.comb += [
+			trport.addr.eq(aph_index),
+			Cat(tmem_rtag, tmem_rvalid).eq(trport.data),
+			twport.addr.eq(dph_index),
+			twport.data.eq(Cat(dph_tag & self._tag_mask, C(1, 1))),
+
+			drport.addr.eq(Mux(dmem_read_in_dph, dph_index, aph_index)),
+			self.bus.hrdata.eq(drport.data),
+			dwport.addr.eq(dph_index),
+			dwport.data.eq(sreg_endian_swap),
+		]
+
+		cache_hit = Signal()
+		m.d.comb += cache_hit.eq(tmem_rvalid & ((tmem_rtag & self._tag_mask) == dph_tag))
 
 		with m.FSM() as fsm:
 			with m.State("IDLE"):
-				with m.If(self.bus.htrans[1] & self.bus.hready & ~self.bus.hwrite):
+				with m.If(aph_read):
+					m.next = "HIT/MISS"
+			with m.State("HIT/MISS"):
+				with m.If(cache_hit):
+					with m.If(aph_read):
+						m.next = "HIT/MISS"
+					with m.Else():
+						m.next = "IDLE"
+				with m.Else():
 					m.next = "CMD/ADDR"
 					m.d.sync += [
 						self.pad_cs.eq(0),
-						sreg.eq(cmd_plus_addr),
-						shift_ctr.eq(FLASH_ADDR_WIDTH + 8 - 1)
+						shift_ctr.eq(self.FLASH_ADDR_WIDTH + 8 - 1)
 					]
 			with m.State("CMD/ADDR"):
 				m.d.sync += self.pad_sck.eq(~self.pad_sck)
@@ -248,14 +326,20 @@ class AHBLFlashXIP(Elaboratable):
 					m.next = "BACKPORCH"
 			with m.State("BACKPORCH"):
 				m.d.sync += self.pad_cs.eq(1)
+				# dmem readback happens this cycle, so the aph read can't take place until
+				# the next cycle. This means we must return to the idle state so aph read
+				# can take place there, we can't skip straight to HIT/MISS of next access.
 				m.next = "IDLE"
+			m.d.comb += [
+				self.bus.hready_resp.eq(fsm.ongoing("IDLE") |
+						(fsm.ongoing("HIT/MISS") & cache_hit)),
+				twport.en.eq(fsm.ongoing("HIT/MISS") & ~cache_hit),
+				trport.en.eq(aph_read),
+				dwport.en.eq(fsm.ongoing("DATA") & self.pad_sck & ~shift_ctr.any()),
+				drport.en.eq(aph_read | fsm.ongoing("BACKPORCH")),
+				dmem_read_in_dph.eq(fsm.ongoing("BACKPORCH"))
+			]
 
-			m.d.comb += self.bus.hready_resp.eq(fsm.ongoing("IDLE"))
-
-		# Endianness swap
-		m.d.comb += self.bus.hrdata.eq(Cat(
-			sreg.word_select(i, 8) for i in reversed(range(self._dwidth // 8))
-		))
 		return m
 
 
@@ -263,31 +347,40 @@ class AnkleSoC(Elaboratable):
 	"""
 	AnkleSoC -- the smallest useful sock
 	"""
-	def __init__(self, ram_size_bytes=4096, ram_init=None, n_leds=5):
+	def __init__(self, ram_size_bytes=4096, ram_init=None, n_leds=5, cpu_reset_vector=None):
 		self._ram_size_bytes = ram_size_bytes
 		self._ram_init = ram_init
 		self._n_leds = n_leds
+		if cpu_reset_vector is None:
+			self._cpu_reset_vector = 0x0040_0000
+		else:
+			self._cpu_reset_vector = cpu_reset_vector
 		# Testbench-only signals:
 		self.flash = None
 		self.leds = None
+		self.uart = None
 
 	def elaborate(self, platform):
 		m = Module()
 		awidth = 32
 		dwidth = 32
 		ram_depth = self._ram_size_bytes // (dwidth // 8)
-		m.submodules.cpu = cpu = Hazard2CPU(reset_vector=0x2000_0000)
+		m.submodules.cpu = cpu = Hazard2CPU(reset_vector=self._cpu_reset_vector)
 		m.submodules.ram = ram = AHBLSRAM(awidth, dwidth, depth=ram_depth, init=self._ram_init)
-		m.submodules.led = led = AHBLBlinky(awidth, dwidth, n_leds = self._n_leds)
-		m.submodules.xip = xip = AHBLFlashXIP(awidth, dwidth)
+		m.submodules.led = led = AHBLBlinky(awidth, dwidth, n_leds=self._n_leds)
+		m.submodules.utx = utx = AHBLBlinky(awidth, dwidth, n_leds=1)
+		m.submodules.xip = xip = AHBLFlashXIP(awidth, dwidth, flash_size_bytes=0x40_0000)
+		# Addresses are mapped so that major decode is one-hot on the MSBs.
 		m.submodules.splitter = splitter = AHBLSplitter(awidth, dwidth, ports=(
-			(0x2000_0000, 0x2000_0000), # 512 MB flash segment
-			(0x4000_0000, 0x4000_0000), # 512 MB RAM segment
-			(0x8000_0000, 0x8000_0000), # 512 MB IO segment
+			(0x0040_0000, 0x0040_0000), # 4 MB flash segment
+			(0x0080_0000, 0x0080_0000), # 4 MB RAM segment
+			(0x0100_0000, 0x0100_1000), # 4 MB IO segment, first register
+			(0x0100_1000, 0x0100_1000), # 4 MB IO segment, second register
 		))
 		splitter.down[0].connect_to_downstream(m, xip.bus)
 		splitter.down[1].connect_to_downstream(m, ram.bus)
 		splitter.down[2].connect_to_downstream(m, led.bus)
+		splitter.down[3].connect_to_downstream(m, utx.bus)
 
 		# Upstream splitter port needs connecting manually because the processor
 		# port doesn't use our AHBLPort class (since it's intended for standalone use)
@@ -305,13 +398,16 @@ class AnkleSoC(Elaboratable):
 
 		# IO hookup
 		if platform is None:
-			self.leds = leds = Signal(5)
+			self.leds = leds = Signal(self._n_leds)
 			self.flash = flash = Record((("mosi", 1), ("miso", 1), ("clk", 1), ("cs", 1)))
+			self.uart = uart = Record((("tx", 1),))
 		else:
 			leds = Cat(platform.request("led", i) for i in range(self._n_leds))
 			flash = platform.request("spi_flash_1x")
+			uart = platform.request("uart")
 		m.d.comb += [
 			leds.eq(led.leds),
+			uart.tx.eq(utx.leds),
 			flash.cs.eq(xip.pad_cs),
 			flash.clk.eq(xip.pad_sck),
 			flash.mosi.eq(xip.pad_mosi),

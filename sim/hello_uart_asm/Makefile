@@ -1,5 +1,5 @@
-SRCS := hello_asm.S
-APP  := hello_asm
+SRCS := hello_uart_asm.S ../common/soft_uart.S
+APP  := hello_uart_asm
 
 CCFLAGS = -nostartfiles
 LDSCRIPT = ../common/memmap.ld

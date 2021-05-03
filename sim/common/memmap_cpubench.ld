@@ -8,8 +8,7 @@
 
 MEMORY
   {
-    FLASH (x)  : ORIGIN = 4M, LENGTH = 4M
-    RAM   (wx) : ORIGIN = 8M, LENGTH = 4K
+    RAM (wx)  : ORIGIN = 0x0, LENGTH = 16M
   }
 
 OUTPUT_FORMAT("elf32-littleriscv", "elf32-littleriscv",
@@ -19,7 +18,6 @@ ENTRY(_start)
 SEARCH_DIR("/opt/riscv/riscv32-unknown-elf/lib");
 SECTIONS
 {
-  . = ORIGIN(RAM);
   /* Read-only sections, merged into text segment: */
   PROVIDE (__executable_start = ORIGIN(RAM)); . = ORIGIN(RAM);
   .interp         : { *(.interp) }
@@ -59,7 +57,7 @@ SECTIONS
   .init           :
   {
     KEEP (*(SORT_NONE(.init)))
-  } > RAM
+  }
   .plt            : { *(.plt) }
   .iplt           : { *(.iplt) }
   .text           :
@@ -72,7 +70,7 @@ SECTIONS
     *(.text .stub .text.* .gnu.linkonce.t.*)
     /* .gnu.warning sections are handled specially by elf32.em.  */
     *(.gnu.warning)
-  } > RAM
+  }
   .fini           :
   {
     KEEP (*(SORT_NONE(.fini)))
@@ -162,8 +160,6 @@ SECTIONS
   .data           :
   {
     *(.data .data.* .gnu.linkonce.d.*)
-    . = ALIGN(4);
-    *(.time_critical .time_critical.*)
     SORT(CONSTRUCTORS)
   }
   .data1          : { *(.data1) }
