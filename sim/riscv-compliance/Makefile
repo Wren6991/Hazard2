@@ -1,4 +1,3 @@
-TEST = add-01
 TEST_ARCH = I
 BIN_ARCH = rv32i
 SIM_EXEC = ../tb_cpu.py

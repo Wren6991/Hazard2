@@ -1,8 +1,9 @@
 from nmigen import *
 from nmigen.utils import log2_int
 from functools import reduce
-
 from hazard2 import Hazard2CPU
+
+# AnkleSoC: Minimal system-on-chip for Hazard2.
 
 # TODO this could probably be a Record once I figure out the direction stuff
 class AHBLPort:
@@ -56,7 +57,7 @@ class AHBLSplitter(Elaboratable):
 	def elaborate(self, platform):
 		m = Module()
 
-		decode_aph = Cat(self.up.haddr & mask == base for base, mask in self._addr_map)
+		decode_aph = Cat((self.up.haddr & mask) == base for base, mask in self._addr_map)
 		decode_aph_masked = decode_aph & Repl(self.up.htrans[1], decode_aph.shape().width)
 		decode_dph = Signal(decode_aph.shape())
 
@@ -185,16 +186,87 @@ class AHBLSRAM(Elaboratable):
 		return m
 
 
+class AHBLFlashXIP(Elaboratable):
+	"""
+	Tiny flash execute-in-place interface. Always perform 03h serial read
+	commands with size equal to the bus width, and address aligned down to bus
+	width, regardless of read HSIZE. SCK runs at half the sync domain clock
+	frequency.
+	"""
+	def __init__(self, awidth, dwidth):
+		self._awidth = awidth
+		self._dwidth = dwidth
+
+		self.bus = AHBLPort(awidth, dwidth)
+		self.pad_cs   = Signal(reset=1)
+		self.pad_sck  = Signal()
+		self.pad_mosi = Signal()
+		self.pad_miso = Signal()
+
+	def elaborate(self, platform):
+		m = Module()
+		SERIAL_READ_CMD = 0x03
+		FLASH_ADDR_WIDTH = 24
+
+		addr_sreg = Signal(FLASH_ADDR_WIDTH + 8)
+		data_sreg = Signal(self._dwidth)
+		shift_ctr = Signal(range(max(FLASH_ADDR_WIDTH + 8, self._dwidth)))
+		m.d.comb += self.pad_mosi.eq(addr_sreg[-1])
+
+		bus_addr_mask = -1 << log2_int(self._dwidth // 8)
+		cmd_plus_addr = Cat(
+			(self.bus.haddr & bus_addr_mask)[:FLASH_ADDR_WIDTH],
+			C(SERIAL_READ_CMD, 8)
+		)
+
+		with m.FSM() as fsm:
+			with m.State("IDLE"):
+				with m.If(self.bus.htrans[1] & self.bus.hready & ~self.bus.hwrite):
+					m.next = "CMD/ADDR"
+					m.d.sync += [
+						self.pad_cs.eq(0),
+						addr_sreg.eq(cmd_plus_addr),
+						shift_ctr.eq(FLASH_ADDR_WIDTH + 8 - 1)
+					]
+			with m.State("CMD/ADDR"):
+				m.d.sync += self.pad_sck.eq(~self.pad_sck)
+				with m.If(self.pad_sck):
+					m.d.sync += [
+						addr_sreg.eq(addr_sreg << 1),
+						shift_ctr.eq(shift_ctr - 1)
+					]
+				with m.If(self.pad_sck & ~shift_ctr.any()):
+					m.next = "DATA"
+					m.d.sync += shift_ctr.eq(self._dwidth - 1)
+			with m.State("DATA"):
+				m.d.sync += self.pad_sck.eq(~self.pad_sck)
+				with m.If(self.pad_sck):
+					m.d.sync += shift_ctr.eq(shift_ctr - 1)
+				with m.Else():
+					m.d.sync += data_sreg.eq((data_sreg << 1) | self.pad_miso)
+				with m.If(self.pad_sck & ~shift_ctr.any()):
+					m.next = "BACKPORCH"
+			with m.State("BACKPORCH"):
+				m.d.sync += self.pad_cs.eq(1)
+				m.next = "IDLE"
+
+			m.d.comb += self.bus.hready_resp.eq(fsm.ongoing("IDLE"))
+
+		# Endianness swap
+		m.d.comb += self.bus.hrdata.eq(Cat(
+			data_sreg.word_select(i, 8) for i in reversed(range(self._dwidth // 8))
+		))
+		return m
+
+
 class AnkleSoC(Elaboratable):
 	"""
 	AnkleSoC -- the smallest useful sock
 	"""
-	def __init__(self, ram_size_bytes=1024, ram_init=None):
+	def __init__(self, ram_size_bytes=4096, ram_init=None):
 		self._ram_size_bytes = ram_size_bytes
 		self._ram_init = ram_init
 		self._n_leds = 5
-
-		self.leds = Signal(self._n_leds)
 
 	def elaborate(self, platform):
 		m = Module()
@@ -202,14 +274,17 @@ class AnkleSoC(Elaboratable):
 		dwidth = 32
 		ram_depth = self._ram_size_bytes // (dwidth // 8)
 		m.submodules.cpu = cpu = Hazard2CPU(reset_vector=0x0)
-		m.submodules.ram = ram = AHBLSRAM(awidth=awidth, dwidth=dwidth, depth=ram_depth, init=self._ram_init)
-		m.submodules.led = led = AHBLBlinky(awidth=awidth, dwidth=dwidth, n_leds = self._n_leds)
-		m.submodules.splitter = splitter = AHBLSplitter(awidth=awidth, dwidth=dwidth, ports=(
-			(0x0000_0000, 0x8000_0000), # 2 GB RAM segment
+		m.submodules.ram = ram = AHBLSRAM(awidth, dwidth, depth=ram_depth, init=self._ram_init)
+		m.submodules.led = led = AHBLBlinky(awidth, dwidth, n_leds = self._n_leds)
+		m.submodules.xip = xip = AHBLFlashXIP(awidth, dwidth)
+		m.submodules.splitter = splitter = AHBLSplitter(awidth, dwidth, ports=(
+			(0x0000_0000, 0xc000_0000), # 1 GB flash segment
+			(0x4000_0000, 0xc000_0000), # 1 GB RAM segment
 			(0x8000_0000, 0x8000_0000), # 2 GB IO segment
 		))
-		splitter.down[0].connect_to_downstream(m, ram.bus)
-		splitter.down[1].connect_to_downstream(m, led.bus)
+		splitter.down[0].connect_to_downstream(m, xip.bus)
+		splitter.down[1].connect_to_downstream(m, ram.bus)
+		splitter.down[2].connect_to_downstream(m, led.bus)
 
 		# Upstream splitter port needs connecting manually because the processor
 		# port doesn't use our AHBLPort class (since it's intended for standalone use)
@@ -225,6 +300,15 @@ class AnkleSoC(Elaboratable):
 			splitter.up.hready.eq(splitter.up.hready_resp)
 		]
 
-		m.d.comb += self.leds.eq(led.leds)
+		# IO hookup
+		leds = Cat(platform.request("led", i) for i in range(5))
+		flash = platform.request("spi_flash_1x")
+		m.d.comb += [
+			leds.eq(led.leds),
+			flash.cs.eq(xip.pad_cs),
+			flash.clk.eq(xip.pad_sck),
+			flash.mosi.eq(xip.pad_mosi),
+			xip.pad_miso.eq(flash.miso)
+		]
 
 		return m
