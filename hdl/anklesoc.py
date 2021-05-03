@@ -273,14 +273,14 @@ class AnkleSoC(Elaboratable):
 		awidth = 32
 		dwidth = 32
 		ram_depth = self._ram_size_bytes // (dwidth // 8)
-		m.submodules.cpu = cpu = Hazard2CPU(reset_vector=0x0)
+		m.submodules.cpu = cpu = Hazard2CPU(reset_vector=0x2000_0000)
 		m.submodules.ram = ram = AHBLSRAM(awidth, dwidth, depth=ram_depth, init=self._ram_init)
 		m.submodules.led = led = AHBLBlinky(awidth, dwidth, n_leds = self._n_leds)
 		m.submodules.xip = xip = AHBLFlashXIP(awidth, dwidth)
 		m.submodules.splitter = splitter = AHBLSplitter(awidth, dwidth, ports=(
-			(0x0000_0000, 0xc000_0000), # 1 GB flash segment
-			(0x4000_0000, 0xc000_0000), # 1 GB RAM segment
-			(0x8000_0000, 0x8000_0000), # 2 GB IO segment
+			(0x2000_0000, 0x2000_0000), # 512 MB flash segment
+			(0x4000_0000, 0x4000_0000), # 512 MB RAM segment
+			(0x8000_0000, 0x8000_0000), # 512 MB IO segment
 		))
 		splitter.down[0].connect_to_downstream(m, xip.bus)
 		splitter.down[1].connect_to_downstream(m, ram.bus)
