@@ -74,6 +74,7 @@ class Hazard2ALU(Elaboratable):
 	def __init__(self):
 		self.i0    = Signal(XLEN)
 		self.i1    = Signal(XLEN)
+		self.shift = Signal(XLEN)
 		self.op    = Signal(Shape.cast(ALUOp))
 		self.take4 = Signal()
 		self.cmp   = Signal()
@@ -81,7 +82,6 @@ class Hazard2ALU(Elaboratable):
 
 	def elaborate(self, platform):
 		m = Module()
-		m.submodules.shifter = shifter = Hazard2Shifter()
 
 		# Add/subtract i0 and i1, then subtract 4 if take4 is true. Use of 3-input adder
 		# encourages tools to implement as carry-save.
@@ -106,12 +106,6 @@ class Hazard2ALU(Elaboratable):
 			with m.Case():
 				m.d.comb += bitwise.eq(self.i0 ^ self.i1)
 
-		m.d.comb += [
-			shifter.i.eq(self.i0),
-			shifter.shamt.eq(self.i1),
-			shifter.right.eq(self.op != ALUOp.SLL),
-			shifter.arith.eq(self.op == ALUOp.SRA)
-		]
 
 		with m.Switch(self.op):
 			with m.Case(ALUOp.ADD):
@@ -123,11 +117,11 @@ class Hazard2ALU(Elaboratable):
 			with m.Case(ALUOp.LTU):
 				m.d.comb += self.o.eq(less_than)
 			with m.Case(ALUOp.SRL):
-				m.d.comb += self.o.eq(shifter.o)
+				m.d.comb += self.o.eq(self.shift)
 			with m.Case(ALUOp.SRA):
-				m.d.comb += self.o.eq(shifter.o)
+				m.d.comb += self.o.eq(self.shift)
 			with m.Case(ALUOp.SLL):
-				m.d.comb += self.o.eq(shifter.o)
+				m.d.comb += self.o.eq(self.shift)
 			with m.Case():
 				m.d.comb += self.o.eq(bitwise)
 		return m
@@ -238,6 +232,7 @@ class Hazard2CPU(Elaboratable):
 		# ALU, and operand/operation selection
 
 		m.submodules.alu = alu = Hazard2ALU()
+		m.submodules.shifter = shifter = Hazard2Shifter()
 
 		aluop_r_i = Signal(alu.op.shape())
 		with m.Switch(funct3):
@@ -304,6 +299,20 @@ class Hazard2CPU(Elaboratable):
 					alu.op.eq(ALUOp.ADD),
 					alu.take4.eq(True)
 				]
+
+		# Shifter is used for both shift instructions and store-data alignment.
+		m.d.comb += [
+			shifter.i.eq(rs1),
+			shifter.shamt.eq(Mux(
+				d_dph_active, d_dph_addr << 3, Mux( # Store (CIR invalid at this point)
+				~opc[3],      cir_rs2,              # RVOpc.OP_IMM  0b00_100
+				              rs2[:5]               # RVOpc.OP      0b01_100
+			))),
+			shifter.right.eq(~d_dph_active & (alu.op != ALUOp.SLL)),
+			shifter.arith.eq(~d_dph_active & (alu.op == ALUOp.SRA)),
+			alu.shift.eq(shifter.o),
+			self.hwdata.eq(shifter.o)
+		]
 
 		# AGU
 
@@ -380,29 +389,18 @@ class Hazard2CPU(Elaboratable):
 				d_dph_signed.eq(~funct3[2])
 			]
 
-
-		# Store data shifter
-		# Unaligned stores behave correctly as long as you don't do them
-
-		with m.Switch(d_dph_addr):
-			with m.Case(0):
-				m.d.comb += self.hwdata.eq(rs2)
-			with m.Case(1):
-				m.d.comb += self.hwdata.eq(Cat(rs2[:8], rs2[:8], rs2[16:]))
-			with m.Case(2):
-				m.d.comb += self.hwdata.eq(Cat(rs2[:16], rs2[:16]))
-			with m.Case(3):
-				m.d.comb += self.hwdata.eq(Cat(rs2[:24], rs2[:8]))
-
 		# Register file
 
 		m.submodules.regfile = regfile = Hazard2Regfile()
 		m.d.comb += [
-			# During load/store, the CIR is updated during cycle n, and the register
-			# file is read for next instruction on cycle n + 1, so delay addr using CIR.
-			regfile.raddr1.eq(Mux(d_dph_active, cir_rs1, self.hrdata[15:20])),
+			# During load/store, the CIR is updated during aphase, and the register
+			# file is read for next instruction during dphase, so delay regaddr using CIR.
+			# Also during store aphase we need to read rs2 through the rs1 port in time
+			# for the dphase, so we can shift it.
+			regfile.raddr1.eq(Mux(access_is_store, cir_rs2,
+				Mux(d_dph_active, cir_rs1, self.hrdata[15:20]))),
 			regfile.raddr2.eq(Mux(d_dph_active, cir_rs2, self.hrdata[20:25])),
-			regfile.ren.eq(~(access_is_loadstore | stall)),
+			regfile.ren.eq(~stall),
 			rs1.eq(regfile.rdata1),
 			rs2.eq(regfile.rdata2)
 		]
